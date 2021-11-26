@@ -21,26 +21,27 @@ const version = "1.0.0"
 // Bendis is the overal type for the Bendis package. Members that are exported in this type
 // are available to any application that uses it.
 type Bendis struct {
-	AppName  	string
-	Debug    	bool
-	Version  	string
-	ErrorLog 	*log.Logger
-	InfoLog  	*log.Logger
-	RootPath 	string
-	Routes   	*chi.Mux
-	Render   	*render.Render
-	Session 	*scs.SessionManager
-	DB 			Database
-	JetViews 	*jet.Set
-	config  	config
+	AppName       string
+	Debug         bool
+	Version       string
+	ErrorLog      *log.Logger
+	InfoLog       *log.Logger
+	RootPath      string
+	Routes        *chi.Mux
+	Render        *render.Render
+	Session       *scs.SessionManager
+	DB            Database
+	JetViews      *jet.Set
+	config        config
+	EncryptionKey string
 }
 
 type config struct {
-	port     	string
-	renderer 	string
-	cookie 		cookieConfig
+	port        string
+	renderer    string
+	cookie      cookieConfig
 	sessionType string
-	database 	databaseConfig
+	database    databaseConfig
 }
 
 // New reads the .env file, creates our application config, populates the Bendis type with settings
@@ -79,7 +80,7 @@ func (b *Bendis) New(rootPath string) error {
 		}
 		b.DB = Database{
 			DatabaseType: os.Getenv("DATABASE_TYPE"),
-			Pool: db,
+			Pool:         db,
 		}
 	}
 
@@ -94,29 +95,31 @@ func (b *Bendis) New(rootPath string) error {
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
 		cookie: cookieConfig{
-			name: os.Getenv("COOKIE_NAME"),
+			name:     os.Getenv("COOKIE_NAME"),
 			lifetime: os.Getenv("COOKIE_LIFETIME"),
-			persist: os.Getenv("COOKIE_PERSISTS"),
-			secure: os.Getenv("COOKIE_SECURE"),
-			domain: os.Getenv("COOKIE_DOMAIN"),
+			persist:  os.Getenv("COOKIE_PERSISTS"),
+			secure:   os.Getenv("COOKIE_SECURE"),
+			domain:   os.Getenv("COOKIE_DOMAIN"),
 		},
 		sessionType: os.Getenv("SESSION_TYPE"),
 		database: databaseConfig{
 			database: os.Getenv("DATABASE_TYPE"),
-			dsn: b.BuildDSN(),
+			dsn:      b.BuildDSN(),
 		},
 	}
 
 	// Create session
-	sess := session.Session {
+	sess := session.Session{
 		CookieLifetime: b.config.cookie.lifetime,
-		CookiePersist: b.config.cookie.persist,
-		CookieName: b.config.cookie.name,
-		SessionType: b.config.sessionType,
-		CookieDomain: b.config.cookie.domain,
+		CookiePersist:  b.config.cookie.persist,
+		CookieName:     b.config.cookie.name,
+		SessionType:    b.config.sessionType,
+		CookieDomain:   b.config.cookie.domain,
+		DBPool:         b.DB.Pool,
 	}
 
 	b.Session = sess.InitSession()
+	b.EncryptionKey = os.Getenv("KEY")
 
 	var views = jet.NewSet(
 		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
@@ -189,7 +192,7 @@ func (b *Bendis) createRenderer() {
 		Port: b.config.port,
 		//ServerName: "",
 		JetViews: b.JetViews,
-		Session: b.Session,
+		Session:  b.Session,
 	}
 	b.Render = &myRenderer
 }
@@ -200,11 +203,11 @@ func (b *Bendis) BuildDSN() string {
 	switch os.Getenv("DATABASE_TYPE") {
 	case "postgres", "postgresql":
 		dsn = fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s timezone=UTC connect_timeout=5",
-		os.Getenv("DATABASE_HOST"),
-		os.Getenv("DATABASE_PORT"),
-		os.Getenv("DATABASE_USER"),
-		os.Getenv("DATABASE_NAME"),
-		os.Getenv("DATABASE_SSL_MODE"))
+			os.Getenv("DATABASE_HOST"),
+			os.Getenv("DATABASE_PORT"),
+			os.Getenv("DATABASE_USER"),
+			os.Getenv("DATABASE_NAME"),
+			os.Getenv("DATABASE_SSL_MODE"))
 
 		if os.Getenv("DATABASE_PASS") != "" {
 			dsn = fmt.Sprintf("%s password=%s", dsn, os.Getenv("DATABASE_PASS"))
