@@ -3,6 +3,7 @@ package render
 import (
 	"errors"
 	"fmt"
+	"github.com/justinas/nosurf"
 	"html/template"
 	"log"
 	"net/http"
@@ -37,6 +38,7 @@ type TemplateData struct {
 func (b *Render) defaultData(td *TemplateData, r *http.Request) *TemplateData {
 	td.Secure = b.Secure
 	td.ServerName = b.ServerName
+	td.CSRFToken = nosurf.Token(r)
 	td.Port = b.Port
 	if b.Session.Exists(r.Context(), "userID") {
 		td.IsAuthenticated = true
@@ -90,7 +92,7 @@ func (b *Render) JetPage(w http.ResponseWriter, r *http.Request, templateName st
 	}
 
 	td := &TemplateData{}
-	if data !=  nil {
+	if data != nil {
 		td = data.(*TemplateData)
 	}
 

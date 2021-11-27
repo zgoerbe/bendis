@@ -10,20 +10,26 @@ type initPaths struct {
 }
 
 // cookieConfig holds cookie config values
-type cookieConfig struct{
-	name string
+type cookieConfig struct {
+	name     string
 	lifetime string
-	persist string
-	secure string
-	domain string
+	persist  string
+	secure   string
+	domain   string
 }
 
-type databaseConfig struct{
-	dsn string
+type databaseConfig struct {
+	dsn      string
 	database string
 }
 
 type Database struct {
 	DatabaseType string
-	Pool *sql.DB
+	Pool         *sql.DB
+}
+
+type RedisConfig struct {
+	host     string
+	password string
+	prefix   string
 }

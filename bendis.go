@@ -2,6 +2,8 @@ package bendis
 
 import (
 	"fmt"
+	"github.com/gomodule/redigo/redis"
+	"github.com/zgoerbe/bendis/cache"
 	"log"
 	"net/http"
 	"os"
@@ -16,7 +18,9 @@ import (
 	"github.com/zgoerbe/bendis/session"
 )
 
-const version = "1.0.0"
+const version = "0.1.0"
+
+var myRedisCache *cache.RedisCache
 
 // Bendis is the overal type for the Bendis package. Members that are exported in this type
 // are available to any application that uses it.
@@ -34,6 +38,7 @@ type Bendis struct {
 	JetViews      *jet.Set
 	config        config
 	EncryptionKey string
+	Cache         cache.Cache
 }
 
 type config struct {
@@ -42,6 +47,7 @@ type config struct {
 	cookie      cookieConfig
 	sessionType string
 	database    databaseConfig
+	redis       RedisConfig
 }
 
 // New reads the .env file, creates our application config, populates the Bendis type with settings
@@ -84,6 +90,11 @@ func (b *Bendis) New(rootPath string) error {
 		}
 	}
 
+	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
+		myRedisCache = b.createClientRedisCache()
+		b.Cache = myRedisCache
+	}
+
 	b.InfoLog = infoLog
 	b.ErrorLog = errorLog
 	b.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
@@ -106,27 +117,44 @@ func (b *Bendis) New(rootPath string) error {
 			database: os.Getenv("DATABASE_TYPE"),
 			dsn:      b.BuildDSN(),
 		},
+		redis: RedisConfig{
+			host:     os.Getenv("REDIS_HOST"),
+			password: os.Getenv("REDIS_PASSWORD"),
+			prefix:   os.Getenv("REDIS_PREFIX"),
+		},
 	}
 
-	// Create session
+	// create session
 	sess := session.Session{
 		CookieLifetime: b.config.cookie.lifetime,
 		CookiePersist:  b.config.cookie.persist,
 		CookieName:     b.config.cookie.name,
 		SessionType:    b.config.sessionType,
 		CookieDomain:   b.config.cookie.domain,
-		DBPool:         b.DB.Pool,
+	}
+
+	switch b.config.sessionType {
+	case "redis":
+		sess.RedisPool = myRedisCache.Conn
+	case "mysql", "postgres", "mariadb", "postgresql":
+		sess.DBPool = b.DB.Pool
 	}
 
 	b.Session = sess.InitSession()
 	b.EncryptionKey = os.Getenv("KEY")
 
-	var views = jet.NewSet(
-		jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
-		jet.InDevelopmentMode(),
-	)
-
-	b.JetViews = views
+	if b.Debug {
+		var views = jet.NewSet(
+			jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
+			jet.InDevelopmentMode(),
+		)
+		b.JetViews = views
+	} else {
+		var views = jet.NewSet(
+			jet.NewOSFileSystemLoader(fmt.Sprintf("%s/views", rootPath)),
+		)
+		b.JetViews = views
+	}
 
 	b.createRenderer()
 
@@ -195,6 +223,34 @@ func (b *Bendis) createRenderer() {
 		Session:  b.Session,
 	}
 	b.Render = &myRenderer
+}
+
+func (b *Bendis) createClientRedisCache() *cache.RedisCache {
+	cacheClient := cache.RedisCache{
+		Conn:   b.createRedisPool(),
+		Prefix: b.config.redis.prefix,
+	}
+	return &cacheClient
+}
+
+func (b *Bendis) createRedisPool() *redis.Pool {
+	return &redis.Pool{
+		Dial: func() (redis.Conn, error) {
+			return redis.Dial("tcp",
+				b.config.redis.host,
+				redis.DialPassword(b.config.redis.password))
+		},
+		//DialContext: nil,
+		TestOnBorrow: func(conn redis.Conn, t time.Time) error {
+			_, err := conn.Do("PING")
+			return err
+		},
+		MaxIdle:     50,
+		MaxActive:   10000,
+		IdleTimeout: 240 * time.Second,
+		//Wait:            false,
+		//MaxConnLifetime: 0,
+	}
 }
 
 func (b *Bendis) BuildDSN() string {

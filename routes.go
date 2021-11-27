@@ -16,6 +16,7 @@ func (b *Bendis) routes() http.Handler {
 	}
 	mux.Use(middleware.Recoverer)
 	mux.Use(b.SessionLoad)
+	mux.Use(b.NoSurf)
 
 	//mux.Get("/", func(w http.ResponseWriter, r *http.Request){
 	//	fmt.Fprint(w, "Welcome to Bendis")
