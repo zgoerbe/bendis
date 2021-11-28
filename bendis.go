@@ -2,7 +2,9 @@ package bendis
 
 import (
 	"fmt"
+	"github.com/dgraph-io/badger/v3"
 	"github.com/gomodule/redigo/redis"
+	"github.com/robfig/cron/v3"
 	"github.com/zgoerbe/bendis/cache"
 	"log"
 	"net/http"
@@ -21,6 +23,9 @@ import (
 const version = "0.1.0"
 
 var myRedisCache *cache.RedisCache
+var myBadgerCache *cache.BadgerCache
+var redisPool *redis.Pool
+var badgerConn *badger.DB
 
 // Bendis is the overal type for the Bendis package. Members that are exported in this type
 // are available to any application that uses it.
@@ -39,6 +44,7 @@ type Bendis struct {
 	config        config
 	EncryptionKey string
 	Cache         cache.Cache
+	Scheduler     *cron.Cron
 }
 
 type config struct {
@@ -93,6 +99,23 @@ func (b *Bendis) New(rootPath string) error {
 	if os.Getenv("CACHE") == "redis" || os.Getenv("SESSION_TYPE") == "redis" {
 		myRedisCache = b.createClientRedisCache()
 		b.Cache = myRedisCache
+		redisPool = myRedisCache.Conn
+	}
+
+	var scheduler = cron.New()
+	b.Scheduler = scheduler
+
+	if os.Getenv("CACHE") == "badger" {
+		myBadgerCache = b.createClientBadgerCache()
+		b.Cache = myBadgerCache
+		badgerConn = myBadgerCache.Conn
+
+		_, err = b.Scheduler.AddFunc("@daily", func() {
+			_ = myBadgerCache.Conn.RunValueLogGC(0.7)
+		})
+		if err != nil {
+			return err
+		}
 	}
 
 	b.InfoLog = infoLog
@@ -186,7 +209,17 @@ func (b *Bendis) ListenAndServer() {
 		WriteTimeout: 600 * time.Second,
 	}
 
-	defer b.DB.Pool.Close()
+	if b.DB.Pool != nil {
+		defer b.DB.Pool.Close()
+	}
+
+	if redisPool != nil {
+		defer redisPool.Close()
+	}
+
+	if badgerConn != nil {
+		defer badgerConn.Close()
+	}
 
 	b.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
 	err := srv.ListenAndServe()
@@ -233,6 +266,13 @@ func (b *Bendis) createClientRedisCache() *cache.RedisCache {
 	return &cacheClient
 }
 
+func (b *Bendis) createClientBadgerCache() *cache.BadgerCache {
+	cacheClient := cache.BadgerCache{
+		Conn: b.createBadgerConn(),
+	}
+	return &cacheClient
+}
+
 func (b *Bendis) createRedisPool() *redis.Pool {
 	return &redis.Pool{
 		Dial: func() (redis.Conn, error) {
@@ -251,6 +291,16 @@ func (b *Bendis) createRedisPool() *redis.Pool {
 		//Wait:            false,
 		//MaxConnLifetime: 0,
 	}
+}
+
+func (b *Bendis) createBadgerConn() *badger.DB {
+	db, err := badger.Open(badger.DefaultOptions(b.RootPath + "/tmp/badger"))
+	if err != nil {
+		b.InfoLog.Println(err)
+		return nil
+	}
+
+	return db
 }
 
 func (b *Bendis) BuildDSN() string {

@@ -1,0 +1,6 @@
+
+*.vlog
+*.mem
+cache/testdata/tmp/badger/DISCARD
+cache/testdata/tmp/badger/KEYREGISTRY
+cache/testdata/tmp/badger/MANIFEST
