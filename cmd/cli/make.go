@@ -24,8 +24,8 @@ func doMake(arg2, arg3 string) error {
 
 		fileName := fmt.Sprintf("%d_%s", time.Now().UnixMicro(), arg3)
 
-		upFile := bend.RootPath + "/migrations/" + fileName + "." +dbType + ".up.sql"
-		downFile := bend.RootPath + "/migrations/" + fileName + "." +dbType + ".down.sql"
+		upFile := bend.RootPath + "/migrations/" + fileName + "." + dbType + ".up.sql"
+		downFile := bend.RootPath + "/migrations/" + fileName + "." + dbType + ".down.sql"
 
 		err := copyFileFromTemplate("templates/migrations/migration."+dbType+".up.sql", upFile)
 		if err != nil {
@@ -97,6 +97,22 @@ func doMake(arg2, arg3 string) error {
 		if err != nil {
 			exitGracefully(err)
 		}
+	case "mail":
+		if arg3 == "" {
+			exitGracefully(errors.New("you must give the mail template a name"))
+		}
+		htmlMail := bend.RootPath + "/mail/" + strings.ToLower(arg3) + ".html.tmpl"
+		plainMail := bend.RootPath + "/mail/" + strings.ToLower(arg3) + ".plain.tmpl"
+
+		err := copyFileFromTemplate("templates/mailer/mail.html.tmpl", htmlMail)
+		if err != nil {
+			exitGracefully(err)
+		}
+		err = copyFileFromTemplate("templates/mailer/mail.plain.tmpl", plainMail)
+		if err != nil {
+			exitGracefully(err)
+		}
+
 	case "session":
 		err := doSessionTable()
 		if err != nil {

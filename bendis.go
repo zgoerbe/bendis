@@ -6,6 +6,7 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/robfig/cron/v3"
 	"github.com/zgoerbe/bendis/cache"
+	"github.com/zgoerbe/bendis/mailer"
 	"log"
 	"net/http"
 	"os"
@@ -45,6 +46,7 @@ type Bendis struct {
 	EncryptionKey string
 	Cache         cache.Cache
 	Scheduler     *cron.Cron
+	Mail          mailer.Mail
 }
 
 type config struct {
@@ -61,7 +63,7 @@ type config struct {
 func (b *Bendis) New(rootPath string) error {
 	pathConfig := initPaths{
 		rootPath:    rootPath,
-		folderNames: []string{"handlers", "migrations", "views", "data", "public", "tmp", "logs", "middleware"},
+		folderNames: []string{"handlers", "migrations", "views", "mail", "data", "public", "tmp", "logs", "middleware"},
 	}
 
 	err := b.Init(pathConfig)
@@ -123,6 +125,7 @@ func (b *Bendis) New(rootPath string) error {
 	b.Debug, _ = strconv.ParseBool(os.Getenv("DEBUG"))
 	b.Version = version
 	b.RootPath = rootPath
+	b.Mail = b.createMailer()
 	b.Routes = b.routes().(*chi.Mux)
 
 	b.config = config{
@@ -180,6 +183,7 @@ func (b *Bendis) New(rootPath string) error {
 	}
 
 	b.createRenderer()
+	go b.Mail.ListenForMail()
 
 	return nil
 }
@@ -256,6 +260,27 @@ func (b *Bendis) createRenderer() {
 		Session:  b.Session,
 	}
 	b.Render = &myRenderer
+}
+
+func (b *Bendis) createMailer() mailer.Mail {
+	port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
+	m := mailer.Mail{
+		Domain:      os.Getenv("MAIL_DOMAIN"),
+		Templates:   b.RootPath + "/mail",
+		Host:        os.Getenv("SMTP_HOST"),
+		Port:        port,
+		Username:    os.Getenv("SMTP_USERNAME"),
+		Password:    os.Getenv("SMTP_PASSWORD"),
+		Encryption:  os.Getenv("SMTP_ENCRYPTION"),
+		FromAddress: os.Getenv("FROM_ADDRESS"),
+		FromName:    os.Getenv("FROM_NAME"),
+		Jobs:        make(chan mailer.Message, 20),
+		Results:     make(chan mailer.Result, 20),
+		API:         os.Getenv("MAILER_API"),
+		APIKey:      os.Getenv("MAILER_KEY"),
+		APIUrl:      os.Getenv("MAILER_URL"),
+	}
+	return m
 }
 
 func (b *Bendis) createClientRedisCache() *cache.RedisCache {
