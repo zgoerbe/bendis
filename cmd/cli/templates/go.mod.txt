@@ -11,7 +11,7 @@ require (
 	github.com/justinas/nosurf v1.1.1
 	github.com/ory/dockertest/v3 v3.8.1
 	github.com/upper/db/v4 v4.2.1
-	github.com/zgoerbe/bendis v0.0.0-00010101000000-000000000000
+	github.com/zgoerbe/bendis v0.1.0
 	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519
 )
 
