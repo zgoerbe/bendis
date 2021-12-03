@@ -5,21 +5,25 @@ import (
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
-func setup() {
-	err := godotenv.Load()
-	if err != nil {
-		exitGracefully(err)
-	}
+func setup(arg1, arg2 string) {
+	if arg1 != "new" && arg1 != "version" && arg1 != "help" {
+		err := godotenv.Load()
+		if err != nil {
+			exitGracefully(err)
+		}
 
-	path, err := os.Getwd()
-	if err != nil {
-		exitGracefully(err)
-	}
+		path, err := os.Getwd()
+		if err != nil {
+			exitGracefully(err)
+		}
 
-	bend.RootPath = path
-	bend.DB.DatabaseType = os.Getenv("DATABASE_TYPE")
+		bend.RootPath = path
+		bend.DB.DatabaseType = os.Getenv("DATABASE_TYPE")
+	}
 }
 
 func getDSN() string {
@@ -67,4 +71,49 @@ func showHelp() {
     make session          - creates a table in the database as a session store
     make mail <name>      - creates two starter mail templates in the mail directory
 `)
+}
+
+func updateSourceFiles(path string, fi os.FileInfo, err error) error {
+	// check for error before doing anything else
+	if err != nil {
+		return err
+	}
+
+	// check if current file is directory
+	if fi.IsDir() {
+		return nil
+	}
+
+	// only check go files
+	matched, err := filepath.Match("*.go", fi.Name())
+	if err != nil {
+		return err
+	}
+
+	// we have a matching file
+	if matched {
+		// read file contents
+		read, err := os.ReadFile(path)
+		if err != nil {
+			exitGracefully(err)
+		}
+
+		newContents := strings.Replace(string(read), "myapp", appURL, -1)
+
+		// write the changed file
+		err = os.WriteFile(path, []byte(newContents), 0)
+		if err != nil {
+			exitGracefully(err)
+		}
+	}
+
+	return nil
+}
+
+func updateSource() {
+	// walk entire project folder including subfolders
+	err := filepath.Walk(".", updateSourceFiles)
+	if err != nil {
+		exitGracefully(err)
+	}
 }

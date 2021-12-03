@@ -1,4 +1,6 @@
-
+.idea
+coverage.out
+dist/*
 *.vlog
 *.mem
 cache/testdata/tmp/badger/DISCARD
