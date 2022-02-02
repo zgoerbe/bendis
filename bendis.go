@@ -6,6 +6,9 @@ import (
 	"github.com/gomodule/redigo/redis"
 	"github.com/robfig/cron/v3"
 	"github.com/zgoerbe/bendis/cache"
+	"github.com/zgoerbe/bendis/filesystems/miniofilesystem"
+	"github.com/zgoerbe/bendis/filesystems/sftpfilsystem"
+	"github.com/zgoerbe/bendis/filesystems/webdavfilesystem"
 	"github.com/zgoerbe/bendis/mailer"
 	"log"
 	"net/http"
@@ -49,6 +52,7 @@ type Bendis struct {
 	Scheduler     *cron.Cron
 	Mail          mailer.Mail
 	Server        Server
+	FileSystems   map[string]interface{}
 }
 
 type Server struct {
@@ -204,6 +208,7 @@ func (b *Bendis) New(rootPath string) error {
 	}
 
 	b.createRenderer()
+	b.FileSystems = b.createFileSystems()
 	go b.Mail.ListenForMail()
 
 	return nil
@@ -370,4 +375,46 @@ func (b *Bendis) BuildDSN() string {
 	}
 
 	return dsn
+}
+
+func (b *Bendis) createFileSystems() map[string]interface{} {
+	fileSystems := make(map[string]interface{})
+
+	if os.Getenv("MINIO_SECRET") != "" {
+		useSSL := false
+		if strings.ToLower(os.Getenv("MINIO_USESSL")) == "true" {
+			useSSL = true
+		}
+
+		minio := miniofilesystem.Minio{
+			Endpoint: os.Getenv("MINIO_ENDPOINT"),
+			Key:      os.Getenv("MINIO_KEY"),
+			Secret:   os.Getenv("MINIO_SECRET"),
+			UseSSL:   useSSL,
+			Region:   os.Getenv("MINIO_REGION"),
+			Bucket:   os.Getenv("MINIO_BUCKET"),
+		}
+		fileSystems["MINIO"] = minio
+	}
+
+	if os.Getenv("SFTP_HOST") != "" {
+		sftp := sftpfilsystem.SFTP{
+			Host: os.Getenv("SFTP_HOST"),
+			User: os.Getenv("SFTP_USER"),
+			Pass: os.Getenv("SFTP_PASS"),
+			Port: os.Getenv("SFTP_PORT"),
+		}
+		fileSystems["SFTP"] = sftp
+	}
+
+	if os.Getenv("WEBDAV_HOST") != "" {
+		webdav := webdavfilesystem.WebDAV{
+			Host: os.Getenv("WEBDAV_HOST"),
+			User: os.Getenv("WEBDAV_USER"),
+			Pass: os.Getenv("WEBDAV_PASS"),
+		}
+		fileSystems["WEBDAV"] = webdav
+	}
+
+	return fileSystems
 }
