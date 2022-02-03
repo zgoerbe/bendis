@@ -7,6 +7,7 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/zgoerbe/bendis/cache"
 	"github.com/zgoerbe/bendis/filesystems/miniofilesystem"
+	"github.com/zgoerbe/bendis/filesystems/s3filesystem"
 	"github.com/zgoerbe/bendis/filesystems/sftpfilsystem"
 	"github.com/zgoerbe/bendis/filesystems/webdavfilesystem"
 	"github.com/zgoerbe/bendis/mailer"
@@ -53,6 +54,10 @@ type Bendis struct {
 	Mail          mailer.Mail
 	Server        Server
 	FileSystems   map[string]interface{}
+	S3            s3filesystem.S3
+	SFTP          sftpfilsystem.SFTP
+	WebDAV        webdavfilesystem.WebDAV
+	Minio         miniofilesystem.Minio
 }
 
 type Server struct {
@@ -69,6 +74,12 @@ type config struct {
 	sessionType string
 	database    databaseConfig
 	redis       RedisConfig
+	uploads     uploadConfig
+}
+
+type uploadConfig struct {
+	allowedMimeTypes []string
+	maxUploadSize    int64
 }
 
 // New reads the .env file, creates our application config, populates the Bendis type with settings
@@ -141,6 +152,20 @@ func (b *Bendis) New(rootPath string) error {
 	b.Mail = b.createMailer()
 	b.Routes = b.routes().(*chi.Mux)
 
+	// file uploads
+	exploded := strings.Split(os.Getenv("ALLOWED_FILETYPES"), ",")
+	var mimeTypes []string
+	for _, m := range exploded {
+		mimeTypes = append(mimeTypes, m)
+	}
+
+	var maxUploadSize int64
+	if max, err := strconv.Atoi(os.Getenv("MAX_UPLOAD_SIZE")); err != nil {
+		maxUploadSize = 10 << 20
+	} else {
+		maxUploadSize = int64(max)
+	}
+
 	b.config = config{
 		port:     os.Getenv("PORT"),
 		renderer: os.Getenv("RENDERER"),
@@ -160,6 +185,10 @@ func (b *Bendis) New(rootPath string) error {
 			host:     os.Getenv("REDIS_HOST"),
 			password: os.Getenv("REDIS_PASSWORD"),
 			prefix:   os.Getenv("REDIS_PREFIX"),
+		},
+		uploads: uploadConfig{
+			maxUploadSize:    maxUploadSize,
+			allowedMimeTypes: mimeTypes,
 		},
 	}
 
@@ -380,6 +409,18 @@ func (b *Bendis) BuildDSN() string {
 func (b *Bendis) createFileSystems() map[string]interface{} {
 	fileSystems := make(map[string]interface{})
 
+	if os.Getenv("S3_KEY") != "" {
+		s3 := s3filesystem.S3{
+			Key:      os.Getenv("S3_KEY"),
+			Secret:   os.Getenv("S3_SECRET"),
+			Region:   os.Getenv("S3_REGION"),
+			Endpoint: os.Getenv("S3_ENDPOINT"),
+			Bucket:   os.Getenv("S3_BUCKET"),
+		}
+		fileSystems["S3"] = s3
+		b.S3 = s3
+	}
+
 	if os.Getenv("MINIO_SECRET") != "" {
 		useSSL := false
 		if strings.ToLower(os.Getenv("MINIO_USESSL")) == "true" {
@@ -395,6 +436,7 @@ func (b *Bendis) createFileSystems() map[string]interface{} {
 			Bucket:   os.Getenv("MINIO_BUCKET"),
 		}
 		fileSystems["MINIO"] = minio
+		b.Minio = minio
 	}
 
 	if os.Getenv("SFTP_HOST") != "" {
@@ -405,6 +447,7 @@ func (b *Bendis) createFileSystems() map[string]interface{} {
 			Port: os.Getenv("SFTP_PORT"),
 		}
 		fileSystems["SFTP"] = sftp
+		b.SFTP = sftp
 	}
 
 	if os.Getenv("WEBDAV_HOST") != "" {
@@ -414,6 +457,7 @@ func (b *Bendis) createFileSystems() map[string]interface{} {
 			Pass: os.Getenv("WEBDAV_PASS"),
 		}
 		fileSystems["WEBDAV"] = webdav
+		b.WebDAV = webdav
 	}
 
 	return fileSystems
