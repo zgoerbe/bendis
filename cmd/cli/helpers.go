@@ -73,8 +73,8 @@ func showHelp() {
 	color.Yellow(`Available commands:
 
     help                           - show the help commands
-	down                           - put the server out in maintenance mode
-	up                             - take the server out in maintenance mode
+    down                           - put the server out in maintenance mode
+    up                             - take the server out in maintenance mode
     version                        - print application version
     migrate                        - runs all up migrations that have not been run previously
     migrate down                   - reverses the most recent migrations
