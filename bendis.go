@@ -12,7 +12,8 @@ import (
 	"github.com/zgoerbe/bendis/filesystems/webdavfilesystem"
 	"github.com/zgoerbe/bendis/mailer"
 	"log"
-	"net/http"
+	"net"
+	"net/rpc"
 	"os"
 	"strconv"
 	"strings"
@@ -33,7 +34,9 @@ var myBadgerCache *cache.BadgerCache
 var redisPool *redis.Pool
 var badgerConn *badger.DB
 
-// Bendis is the overal type for the Bendis package. Members that are exported in this type
+var maintenanceMode bool
+
+// Bendis is the overall type for the Bendis package. Members that are exported in this type
 // are available to any application that uses it.
 type Bendis struct {
 	AppName       string
@@ -87,7 +90,7 @@ type uploadConfig struct {
 func (b *Bendis) New(rootPath string) error {
 	pathConfig := initPaths{
 		rootPath:    rootPath,
-		folderNames: []string{"handlers", "migrations", "views", "mail", "data", "public", "tmp", "logs", "middleware"},
+		folderNames: []string{"handlers", "migrations", "views", "mail", "data", "public", "tmp", "logs", "middleware", "screenshots"},
 	}
 
 	err := b.Init(pathConfig)
@@ -255,34 +258,6 @@ func (b *Bendis) Init(p initPaths) error {
 	}
 
 	return nil
-}
-
-// ListenAndServer starts the web server
-func (b *Bendis) ListenAndServer() {
-	srv := &http.Server{
-		Addr:         fmt.Sprintf(":%s", os.Getenv("PORT")),
-		ErrorLog:     b.ErrorLog,
-		Handler:      b.Routes,
-		IdleTimeout:  30 * time.Second,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 600 * time.Second,
-	}
-
-	if b.DB.Pool != nil {
-		defer b.DB.Pool.Close()
-	}
-
-	if redisPool != nil {
-		defer redisPool.Close()
-	}
-
-	if badgerConn != nil {
-		defer badgerConn.Close()
-	}
-
-	b.InfoLog.Printf("Listening on port %s", os.Getenv("PORT"))
-	err := srv.ListenAndServe()
-	b.ErrorLog.Fatal(err)
 }
 
 func (b *Bendis) checkDotEnv(path string) error {
@@ -461,4 +436,41 @@ func (b *Bendis) createFileSystems() map[string]interface{} {
 	}
 
 	return fileSystems
+}
+
+type RPCServer struct{}
+
+func (r *RPCServer) MaintenanceMode(inMaintenanceMode bool, resp *string) error {
+	if inMaintenanceMode {
+		maintenanceMode = true
+		*resp = "Server in maintenance mode"
+	} else {
+		maintenanceMode = false
+		*resp = "Server live!"
+	}
+	return nil
+}
+
+func (b *Bendis) listenRPC() {
+	// if nothing specified for rpc port, don't start
+	if os.Getenv("RPC_PORT") != "" {
+		b.InfoLog.Println("Starting RPC server on port", os.Getenv("RPC_PORT"))
+		err := rpc.Register(new(RPCServer))
+		if err != nil {
+			b.ErrorLog.Println(err)
+			return
+		}
+		listen, err := net.Listen("tcp", "127.0.0.1:"+os.Getenv("RPC_PORT"))
+		if err != nil {
+			b.ErrorLog.Println(err)
+			return
+		}
+		for {
+			rpcConn, err := listen.Accept()
+			if err != nil {
+				continue
+			}
+			go rpc.ServeConn(rpcConn)
+		}
+	}
 }

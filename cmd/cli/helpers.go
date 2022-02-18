@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/joho/godotenv"
@@ -56,20 +57,34 @@ func getDSN() string {
 	return "mysql://" + bend.BuildDSN()
 }
 
+func checkForDB() {
+	dbType := bend.DB.DatabaseType
+
+	if dbType == "" {
+		exitGracefully(errors.New("no database connection provided in .env"))
+	}
+
+	if !fileExists(bend.RootPath + "/config/database.yml") {
+		exitGracefully(errors.New("config/database.yml does not exist"))
+	}
+}
+
 func showHelp() {
 	color.Yellow(`Available commands:
 
-    help                  - show the help commands
-    version               - print application version
-    migrate               - runs all up migrations that have not been run previously
-    migrate down          - reverses the most recent migrations
-    migrate reset         - runs all down migrations in reverse order, and the all up migrations
-    make migration <name> - creates two new up and down migrations in the migration folder
-    make auth             - creates and runs migrations for authentication tables, and creates models and middleware
-    make handler <name>   - creates a stub handler in the handler directory
-    make model <name>     - creates a new model in the data directory
-    make session          - creates a table in the database as a session store
-    make mail <name>      - creates two starter mail templates in the mail directory
+    help                           - show the help commands
+	down                           - put the server out in maintenance mode
+	up                             - take the server out in maintenance mode
+    version                        - print application version
+    migrate                        - runs all up migrations that have not been run previously
+    migrate down                   - reverses the most recent migrations
+    migrate reset                  - runs all down migrations in reverse order, and the all up migrations
+    make migration <name> <format> - creates two new up and down migrations in the migration folder; format=sql/fizz (default fizz)
+    make auth                      - creates and runs migrations for authentication tables, and creates models and middleware
+    make handler <name>            - creates a stub handler in the handler directory
+    make model <name>              - creates a new model in the data directory
+    make session                   - creates a table in the database as a session store
+    make mail <name>               - creates two starter mail templates in the mail directory
 `)
 }
 

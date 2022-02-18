@@ -1,31 +1,35 @@
 package main
 
 import (
-	"fmt"
 	"github.com/fatih/color"
-	"time"
 )
 
 func doAuth() error {
+	checkForDB()
+
 	// migrations
 	dbType := bend.DB.DatabaseType
-	fileName := fmt.Sprintf("%d_create_auth_table", time.Now().UnixMicro())
-	//rootPath := filepath.ToSlash(bend.RootPath)
-	upFile := bend.RootPath + "/migrations/" + fileName + ".up.sql"
-	downFile := bend.RootPath + "/migrations/" + fileName + ".down.sql"
 
-	err := copyFileFromTemplate("templates/migrations/auth_tables."+dbType+".sql", upFile)
+	tx, err := bend.PopConnect()
+	if err != nil {
+		exitGracefully(err)
+	}
+	defer tx.Close()
+
+	upBytes, err := templateFS.ReadFile("templates/migrations/auth_tables." + dbType + ".sql")
 	if err != nil {
 		exitGracefully(err)
 	}
 
-	err = copyDataToFile([]byte("drop table if exists users cascade; drop table if exists tokens cascade; drop table if exists remember_tokens;"), downFile)
+	downBytes := []byte("drop table if exists users cascade; drop table if exists tokens cascade; drop table if exists remember_tokens;")
+
+	err = bend.CreatePopMigration(upBytes, downBytes, "auth", "sql")
 	if err != nil {
 		exitGracefully(err)
 	}
 
 	// run migrations
-	err = doMigrate("up", "")
+	err = bend.RunPopMigrations(tx)
 	if err != nil {
 		exitGracefully(err)
 	}
