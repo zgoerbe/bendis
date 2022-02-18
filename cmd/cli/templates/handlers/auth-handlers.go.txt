@@ -19,7 +19,7 @@ import (
 	"os"
 	"strings"
 
-	"myapp_pt2/data"
+	"myapp/data"
 	"net/http"
 	"time"
 )

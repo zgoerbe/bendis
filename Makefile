@@ -12,7 +12,7 @@ coverage:
 
 ## build_cli: builds the command line tool bendis and copies it to myapp
 build_cli:
-	@go build -o ../myapp_pt2/bendis ./cmd/cli
+	@go build -o ../myapp/bendis ./cmd/cli
 
 ## build: builds the command line tool dist directory
 build:
