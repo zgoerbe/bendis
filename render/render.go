@@ -66,7 +66,8 @@ func (b *Render) Page(w http.ResponseWriter, r *http.Request, view string, varia
 
 // GoPage renders a standard Go template
 func (b *Render) GoPage(w http.ResponseWriter, r *http.Request, view string, data interface{}) error {
-	tmpl, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.page.tmpl", b.RootPath, view))
+	//tmpl, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.page.tmpl", b.RootPath, view))
+	tmpl, err := template.ParseFiles(fmt.Sprintf("%s/views/%s.gohtml", b.RootPath, view))
 	if err != nil {
 		return err
 	}
